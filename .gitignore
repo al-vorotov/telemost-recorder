@@ -1,0 +1,16 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+*.wav
+*.mp3
+data/
+dist/
+*.egg-info/
+.playwright/
+htmlcov/
+.coverage
