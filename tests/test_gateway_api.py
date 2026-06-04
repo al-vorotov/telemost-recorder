@@ -18,7 +18,7 @@ async def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("BOT_API_SECRET", "test-secret")
     monkeypatch.setenv("ALLOWED_TELEGRAM_IDS", "42")
-    monkeypatch.setenv("SIMULATE_MEETING", "false")
+    monkeypatch.setenv("SIMULATE_MEETING", "true")
     reset_session_factory()
     get_settings.cache_clear()
 

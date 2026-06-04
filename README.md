@@ -49,5 +49,19 @@ python -m services.gateway
 python -m services.tg_bot
 ```
 
-В dev-режиме `SIMULATE_MEETING=true` gateway сам переводит сессию в `recording` без Playwright.
+### Режимы
+
+| `SIMULATE_MEETING` | Поведение |
+|--------------------|-----------|
+| `true` | Без браузера: fake `recording` и заглушка транскрипта |
+| `false` | Redis + subprocess `meeting_worker` + Playwright (Телемост) |
+
+Для реального звонка:
+
+```bash
+docker compose up -d redis   # postgres опционально
+./scripts/install-playwright.sh
+# .env: SIMULATE_MEETING=false
+```
+
 Полный диалог в боте: ссылка → подключиться → стоп записи → выход из звонка → транскрибация → удаление аудио.

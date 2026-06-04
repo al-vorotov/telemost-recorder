@@ -4,9 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from services.gateway.db import create_session_factory, init_db
 from services.gateway.services.session_service import SessionService
+from services.gateway.services.worker_manager import WorkerManager
 from shared.config.settings import Settings, get_settings
 
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+_worker_manager: WorkerManager | None = None
 
 
 @lru_cache
@@ -17,8 +19,19 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
+def get_worker_manager() -> WorkerManager:
+    global _worker_manager
+    if _worker_manager is None:
+        _worker_manager = WorkerManager(get_settings())
+    return _worker_manager
+
+
 def get_session_service() -> SessionService:
-    return SessionService(get_settings(), session_factory=get_session_factory())
+    return SessionService(
+        get_settings(),
+        session_factory=get_session_factory(),
+        worker_manager=get_worker_manager(),
+    )
 
 
 async def setup_app(settings: Settings | None = None) -> None:
@@ -28,6 +41,7 @@ async def setup_app(settings: Settings | None = None) -> None:
 
 def reset_session_factory() -> None:
     """For tests."""
-    global _session_factory
+    global _session_factory, _worker_manager
     _session_factory = None
+    _worker_manager = None
     get_session_factory.cache_clear()

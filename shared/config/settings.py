@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     whisper_language: str = "ru"
 
     meeting_worker_headless: bool = False
-    simulate_meeting: bool = True  # dev: auto-progress join/recording without Playwright
+    simulate_meeting: bool = False  # true = без Playwright; false = meeting_worker + Redis
     gateway_base_url: str = "http://127.0.0.1:8000"
 
     @property

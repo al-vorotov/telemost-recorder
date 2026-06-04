@@ -19,17 +19,18 @@ from shared.storage.local import LocalStorageAdapter
 
 logger = logging.getLogger(__name__)
 
-
 class SessionService:
     def __init__(
         self,
         settings: Settings,
         storage: LocalStorageAdapter | None = None,
         session_factory: async_sessionmaker[AsyncSession] | None = None,
+        worker_manager=None,
     ) -> None:
         self._settings = settings
         self._storage = storage or LocalStorageAdapter(settings)
         self._session_factory = session_factory
+        self._worker_manager = worker_manager
         self._simulate_tasks: dict[UUID, asyncio.Task] = {}
 
     async def get_or_create_user(self, db: AsyncSession, telegram_id: int) -> User:
@@ -136,6 +137,8 @@ class SessionService:
             await db.refresh(record)
             if self._settings.simulate_meeting:
                 self._schedule_simulate_join(record.id)
+            elif self._worker_manager:
+                self._worker_manager.spawn(record.id)
 
         return record
 
@@ -173,12 +176,18 @@ class SessionService:
         self, db: AsyncSession, session_id: UUID, telegram_id: int
     ) -> SessionRecord:
         record = await self._get_session_for_user(db, session_id, telegram_id)
+        if (
+            not self._settings.simulate_meeting
+            and self._worker_manager
+            and record.status == SessionStatus.RECORDING.value
+        ):
+            await self._worker_manager.send_stop_capture(session_id)
         record = await self._transition(db, record, "stop_recording")
         audio_path = self._storage.audio_path(session_id)
         audio_path.parent.mkdir(parents=True, exist_ok=True)
-        if not audio_path.exists():
-            audio_path.write_bytes(b"RIFF")  # placeholder until real worker
-        record.audio_object_key = str(audio_path)
+        if self._settings.simulate_meeting and not audio_path.exists():
+            audio_path.write_bytes(b"RIFF")
+        record.audio_object_key = str(audio_path) if audio_path.exists() else None
         record.recorded_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(record)
@@ -186,7 +195,15 @@ class SessionService:
 
     async def leave(self, db: AsyncSession, session_id: UUID, telegram_id: int) -> SessionRecord:
         record = await self._get_session_for_user(db, session_id, telegram_id)
-        return await self._transition(db, record, "leave")
+        if not self._settings.simulate_meeting and self._worker_manager:
+            if record.status in (
+                SessionStatus.CAPTURE_STOPPED.value,
+                SessionStatus.IN_CALL.value,
+            ):
+                await self._worker_manager.send_leave(session_id)
+                self._worker_manager.stop_process(session_id)
+        record = await self._transition(db, record, "leave")
+        return record
 
     async def decline_leave(
         self, db: AsyncSession, session_id: UUID, telegram_id: int
