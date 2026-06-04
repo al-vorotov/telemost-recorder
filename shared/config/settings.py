@@ -12,7 +12,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    database_url: str = "postgresql+asyncpg://recorder:recorder@localhost:5432/telemost_recorder"
+    database_url: str = "sqlite+aiosqlite:///./data/telemost.db"
     redis_url: str = "redis://localhost:6379/0"
     data_dir: Path = Path("./data")
 
@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     whisper_language: str = "ru"
 
     meeting_worker_headless: bool = False
+    simulate_meeting: bool = True  # dev: auto-progress join/recording without Playwright
+    gateway_base_url: str = "http://127.0.0.1:8000"
 
     @property
     def allowed_telegram_id_set(self) -> set[int]:

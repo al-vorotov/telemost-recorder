@@ -36,11 +36,18 @@ telemost-recorder/
 
 Документация по FSM сессий: `shared/contracts/session.py`.
 
-### Запуск сервисов (заглушки)
+### Запуск (gateway + Telegram)
 
 ```bash
-python -m services.gateway      # http://127.0.0.1:8000/health
-python -m services.tg_bot       # нужен TELEGRAM_BOT_TOKEN
-python -m services.transcriber
-python -m services.meeting_worker --session-id <uuid>
+cp .env.example .env
+# Заполните TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_IDS, BOT_API_SECRET
+
+# Терминал 1
+python -m services.gateway
+
+# Терминал 2
+python -m services.tg_bot
 ```
+
+В dev-режиме `SIMULATE_MEETING=true` gateway сам переводит сессию в `recording` без Playwright.
+Полный диалог в боте: ссылка → подключиться → стоп записи → выход из звонка → транскрибация → удаление аудио.
