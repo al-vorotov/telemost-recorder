@@ -3,9 +3,10 @@ from urllib.parse import urlparse
 
 from providers.telemost.provider import TelemostProvider
 
-_PROVIDERS = {
-    "telemost": TelemostProvider(),
-}
+def _build_provider(provider_id: str):
+    if provider_id == "telemost":
+        return TelemostProvider()
+    return None
 
 _TELEMOST_RE = re.compile(
     r"^https?://(telemost\.yandex\.(ru|com)|.*\.telemost\.yandex\.\w+)/j/",
@@ -23,4 +24,4 @@ def detect_provider(meeting_url: str) -> str | None:
 
 
 def get_provider(provider_id: str):
-    return _PROVIDERS.get(provider_id)
+    return _build_provider(provider_id)
