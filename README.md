@@ -47,6 +47,9 @@ python -m services.gateway
 
 # Терминал 2
 python -m services.tg_bot
+
+# Терминал 3 (транскрибация)
+python -m services.transcriber
 ```
 
 ### Режимы
@@ -55,6 +58,11 @@ python -m services.tg_bot
 |--------------------|-----------|
 | `true` | Без браузера: fake `recording` и заглушка транскрипта |
 | `false` | Redis + subprocess `meeting_worker` + Playwright (Телемост) |
+
+| `SIMULATE_TRANSCRIPTION` | Поведение |
+|--------------------------|-----------|
+| `true` | Заглушка `transcript.txt` через 2 сек |
+| `false` | Сервис `transcriber` + faster-whisper |
 
 Для реального звонка:
 
