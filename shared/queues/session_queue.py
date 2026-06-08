@@ -6,6 +6,7 @@ import redis.asyncio as redis
 
 COMMANDS_STREAM = "session.commands"
 EVENTS_STREAM = "session.events"
+TRANSCRIPTION_JOBS_STREAM = "transcription.jobs"
 
 
 @dataclass
@@ -18,11 +19,32 @@ class SessionCommand:
 
 
 @dataclass
+class TranscriptionJobMessage:
+    session_id: str
+    audio_path: str
+    language: str = "ru"
+    idempotency_key: str | None = None
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self))
+
+    @classmethod
+    def from_payload(cls, data: dict[str, Any]) -> "TranscriptionJobMessage":
+        return cls(
+            session_id=data["session_id"],
+            audio_path=data["audio_path"],
+            language=data.get("language", "ru"),
+            idempotency_key=data.get("idempotency_key"),
+        )
+
+
+@dataclass
 class SessionEvent:
     session_id: str
-    event: str  # waiting_room | recording | capture_stopped | left | meeting_ended | failed
+    event: str
     message: str | None = None
     audio_path: str | None = None
+    transcript_path: str | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
@@ -34,6 +56,7 @@ class SessionEvent:
             event=data["event"],
             message=data.get("message"),
             audio_path=data.get("audio_path"),
+            transcript_path=data.get("transcript_path"),
         )
 
 
@@ -46,6 +69,9 @@ class SessionQueue:
 
     async def publish_event(self, event: SessionEvent) -> str:
         return await self._redis.xadd(EVENTS_STREAM, {"payload": event.to_json()})
+
+    async def publish_transcription_job(self, job: TranscriptionJobMessage) -> str:
+        return await self._redis.xadd(TRANSCRIPTION_JOBS_STREAM, {"payload": job.to_json()})
 
     async def read_commands(
         self,
@@ -109,6 +135,39 @@ class SessionQueue:
 
     async def ack_event(self, consumer_group: str, msg_id: str) -> None:
         await self._redis.xack(EVENTS_STREAM, consumer_group, msg_id)
+
+    async def read_transcription_jobs(
+        self,
+        consumer_group: str,
+        consumer_name: str,
+        *,
+        block_ms: int = 5000,
+    ):
+        try:
+            await self._redis.xgroup_create(
+                TRANSCRIPTION_JOBS_STREAM, consumer_group, id="0", mkstream=True
+            )
+        except redis.ResponseError as e:
+            if "BUSYGROUP" not in str(e):
+                raise
+
+        while True:
+            messages = await self._redis.xreadgroup(
+                consumer_group,
+                consumer_name,
+                {TRANSCRIPTION_JOBS_STREAM: ">"},
+                count=1,
+                block=block_ms,
+            )
+            if not messages:
+                continue
+            for _stream, entries in messages:
+                for msg_id, fields in entries:
+                    data = json.loads(fields["payload"])
+                    yield msg_id, TranscriptionJobMessage.from_payload(data)
+
+    async def ack_transcription_job(self, consumer_group: str, msg_id: str) -> None:
+        await self._redis.xack(TRANSCRIPTION_JOBS_STREAM, consumer_group, msg_id)
 
     async def close(self) -> None:
         await self._redis.aclose()
