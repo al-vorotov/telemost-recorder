@@ -6,7 +6,8 @@ from aiogram import F, Router
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from services.tg_bot.clients.gateway import GatewayClient
-from services.tg_bot.handlers.common import parse_session_id, validate_link
+from services.tg_bot.handlers.common import parse_schedule_datetime, parse_session_id, validate_link
+from shared.config.settings import get_settings
 from services.tg_bot.keyboards.session import (
     delete_audio_keyboard,
     in_call_keyboard,
@@ -20,9 +21,8 @@ from shared.contracts.session import SessionStatus
 logger = logging.getLogger(__name__)
 router = Router()
 
-# pending link before session created on gateway
 _pending_links: dict[int, str] = {}
-# active session per telegram user
+_awaiting_schedule: set[int] = set()
 _active_sessions: dict[int, UUID] = {}
 
 
@@ -51,6 +51,10 @@ async def _poll_until(
 @router.message(F.text)
 async def on_text(message: Message, gateway: GatewayClient) -> None:
     if not message.from_user or not message.text:
+        return
+
+    if message.from_user.id in _awaiting_schedule:
+        await _handle_schedule_datetime(message, gateway)
         return
 
     url = validate_link(message.text)
@@ -111,9 +115,55 @@ async def on_join_now(callback: CallbackQuery, gateway: GatewayClient) -> None:
     )
 
 
-@router.callback_query(F.data == "join_scheduled_stub")
-async def on_scheduled_stub(callback: CallbackQuery) -> None:
-    await callback.answer("Расписание — в следующей версии", show_alert=True)
+@router.callback_query(F.data == "join_schedule")
+async def on_join_schedule(callback: CallbackQuery) -> None:
+    if not callback.from_user:
+        return
+    if callback.from_user.id not in _pending_links:
+        await callback.answer("Сначала отправьте ссылку на встречу", show_alert=True)
+        return
+    _awaiting_schedule.add(callback.from_user.id)
+    await callback.answer()
+    await callback.message.answer(  # type: ignore[union-attr]
+        "Введите дату и время подключения в формате:\n"
+        "ДД.ММ.ГГГГ ЧЧ:ММ\n\n"
+        "Например: 08.06.2026 14:30 (время Москвы)"
+    )
+
+
+async def _handle_schedule_datetime(message: Message, gateway: GatewayClient) -> None:
+    if not message.from_user or not message.text:
+        return
+    settings = get_settings()
+    scheduled_at = parse_schedule_datetime(message.text, settings.schedule_timezone)
+    if not scheduled_at:
+        await message.answer("Не понял формат. Пример: 08.06.2026 14:30")
+        return
+
+    _awaiting_schedule.discard(message.from_user.id)
+    url = _pending_links.pop(message.from_user.id, None)
+    if not url:
+        await message.answer("Ссылка потерялась — пришлите её снова.")
+        return
+
+    try:
+        data = await gateway.create_session(
+            meeting_url=url,
+            telegram_id=message.from_user.id,
+            mode="scheduled",
+            scheduled_at=scheduled_at,
+        )
+    except Exception as e:
+        logger.exception("schedule create_session failed")
+        await message.answer(f"Не удалось запланировать: {e}")
+        return
+
+    _active_sessions[message.from_user.id] = UUID(data["id"])
+    await message.answer(
+        f"Запланировано на {scheduled_at.strftime('%d.%m.%Y %H:%M')} (МСК).\n"
+        f"Статус: {data['status_label']}\n\n"
+        "В назначенное время подключусь автоматически. /status — проверить состояние."
+    )
 
 
 @router.callback_query(F.data.startswith("stop_recording:"))

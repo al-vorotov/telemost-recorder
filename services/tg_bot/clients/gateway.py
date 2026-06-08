@@ -41,6 +41,14 @@ class GatewayClient:
             r.raise_for_status()
             return r.json()
 
+    async def get_active_session(self, telegram_id: int) -> dict | None:
+        async with self._client() as client:
+            r = await client.get("/sessions/active/current", params={"telegram_id": telegram_id})
+            if r.status_code == 404:
+                return None
+            r.raise_for_status()
+            return r.json()
+
     async def get_session(self, session_id: UUID, telegram_id: int) -> dict:
         async with self._client() as client:
             r = await client.get(f"/sessions/{session_id}", params={"telegram_id": telegram_id})
