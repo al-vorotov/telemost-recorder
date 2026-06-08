@@ -7,6 +7,7 @@ import redis.asyncio as redis
 COMMANDS_STREAM = "session.commands"
 EVENTS_STREAM = "session.events"
 TRANSCRIPTION_JOBS_STREAM = "transcription.jobs"
+NOTIFICATIONS_STREAM = "notifications"
 
 
 @dataclass
@@ -16,6 +17,24 @@ class SessionCommand:
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
+
+
+@dataclass
+class NotificationMessage:
+    telegram_id: int
+    text: str
+    session_id: str | None = None
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self))
+
+    @classmethod
+    def from_payload(cls, data: dict[str, Any]) -> "NotificationMessage":
+        return cls(
+            telegram_id=int(data["telegram_id"]),
+            text=data["text"],
+            session_id=data.get("session_id"),
+        )
 
 
 @dataclass
@@ -72,6 +91,9 @@ class SessionQueue:
 
     async def publish_transcription_job(self, job: TranscriptionJobMessage) -> str:
         return await self._redis.xadd(TRANSCRIPTION_JOBS_STREAM, {"payload": job.to_json()})
+
+    async def publish_notification(self, notification: NotificationMessage) -> str:
+        return await self._redis.xadd(NOTIFICATIONS_STREAM, {"payload": notification.to_json()})
 
     async def read_commands(
         self,
@@ -168,6 +190,39 @@ class SessionQueue:
 
     async def ack_transcription_job(self, consumer_group: str, msg_id: str) -> None:
         await self._redis.xack(TRANSCRIPTION_JOBS_STREAM, consumer_group, msg_id)
+
+    async def read_notifications(
+        self,
+        consumer_group: str,
+        consumer_name: str,
+        *,
+        block_ms: int = 5000,
+    ):
+        try:
+            await self._redis.xgroup_create(
+                NOTIFICATIONS_STREAM, consumer_group, id="0", mkstream=True
+            )
+        except redis.ResponseError as e:
+            if "BUSYGROUP" not in str(e):
+                raise
+
+        while True:
+            messages = await self._redis.xreadgroup(
+                consumer_group,
+                consumer_name,
+                {NOTIFICATIONS_STREAM: ">"},
+                count=10,
+                block=block_ms,
+            )
+            if not messages:
+                continue
+            for _stream, entries in messages:
+                for msg_id, fields in entries:
+                    data = json.loads(fields["payload"])
+                    yield msg_id, NotificationMessage.from_payload(data)
+
+    async def ack_notification(self, consumer_group: str, msg_id: str) -> None:
+        await self._redis.xack(NOTIFICATIONS_STREAM, consumer_group, msg_id)
 
     async def close(self) -> None:
         await self._redis.aclose()

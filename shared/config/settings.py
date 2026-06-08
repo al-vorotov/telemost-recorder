@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     meeting_worker_headless: bool = False
     simulate_meeting: bool = False  # true = без Playwright; false = meeting_worker + Redis
     simulate_transcription: bool = False  # true = заглушка txt; false = transcriber + Whisper
+    schedule_timezone: str = "Europe/Moscow"
+    retention_sweep_interval_hours: int = 1
     gateway_base_url: str = "http://127.0.0.1:8000"
 
     @property
