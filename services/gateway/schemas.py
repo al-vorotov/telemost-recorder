@@ -21,6 +21,7 @@ class SessionResponse(BaseModel):
     transcript_ready: bool = False
     queue_position: int | None = None
     error_code: str | None = None
+    scheduled_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
