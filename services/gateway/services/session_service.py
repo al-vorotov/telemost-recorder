@@ -15,6 +15,7 @@ from services.gateway.services.session_fsm import (
 from shared.config.settings import Settings
 from shared.contracts.session import SessionStatus
 from shared.db.models import SessionRecord, User
+from shared.queues.session_queue import SessionQueue, TranscriptionJobMessage
 from shared.storage.local import LocalStorageAdapter
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,12 @@ class SessionService:
         self._session_factory = session_factory
         self._worker_manager = worker_manager
         self._simulate_tasks: dict[UUID, asyncio.Task] = {}
+        self._queue: SessionQueue | None = None
+
+    def _get_queue(self) -> SessionQueue:
+        if self._queue is None:
+            self._queue = SessionQueue(self._settings.redis_url)
+        return self._queue
 
     async def get_or_create_user(self, db: AsyncSession, telegram_id: int) -> User:
         result = await db.execute(select(User).where(User.telegram_id == telegram_id))
@@ -219,7 +226,20 @@ class SessionService:
         record.transcription_requested_at = datetime.now(UTC)
         await db.commit()
         await db.refresh(record)
-        self._schedule_simulate_transcribe(session_id)
+        if self._settings.simulate_transcription:
+            self._schedule_simulate_transcribe(session_id)
+        else:
+            audio_path = self._storage.audio_path(session_id)
+            if not audio_path.exists():
+                raise ValueError("Audio file not found — stop recording first")
+            await self._get_queue().publish_transcription_job(
+                TranscriptionJobMessage(
+                    session_id=str(session_id),
+                    audio_path=str(audio_path),
+                    language=self._settings.whisper_language,
+                    idempotency_key=str(session_id),
+                )
+            )
         return record
 
     async def decline_transcribe(
