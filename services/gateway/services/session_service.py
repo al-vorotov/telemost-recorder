@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 from uuid import UUID
 
 from sqlalchemy import select
@@ -91,7 +92,25 @@ class SessionService:
             "transcript_ready": transcript_path.exists(),
             "queue_position": None,
             "error_code": record.error_code,
+            "scheduled_at": record.scheduled_at,
         }
+
+    async def get_active_session(
+        self, db: AsyncSession, telegram_id: int
+    ) -> SessionRecord | None:
+        self._check_acl(telegram_id)
+        result = await db.execute(
+            select(SessionRecord)
+            .join(User)
+            .where(
+                User.telegram_id == telegram_id,
+                SessionRecord.status.notin_(
+                    [SessionStatus.COMPLETED.value, SessionStatus.FAILED.value]
+                ),
+            )
+            .order_by(SessionRecord.created_at.desc())
+        )
+        return result.scalar_one_or_none()
 
     async def create_session(
         self,
@@ -142,12 +161,25 @@ class SessionService:
         if mode == "now":
             await self._transition(db, record, "start_join")
             await db.refresh(record)
-            if self._settings.simulate_meeting:
-                self._schedule_simulate_join(record.id)
-            elif self._worker_manager:
-                self._worker_manager.spawn(record.id)
+            self._start_meeting_worker(record.id)
+        elif mode == "scheduled":
+            if scheduled_at is None:
+                raise ValueError("scheduled_at is required for scheduled mode")
+            tz = ZoneInfo(self._settings.schedule_timezone)
+            at = scheduled_at if scheduled_at.tzinfo else scheduled_at.replace(tzinfo=tz)
+            if at.astimezone(UTC) <= datetime.now(UTC):
+                raise ValueError("scheduled_at must be in the future")
+            from services.gateway.deps import get_scheduler
+
+            get_scheduler().schedule_join(record.id, at)
 
         return record
+
+    def _start_meeting_worker(self, session_id: UUID) -> None:
+        if self._settings.simulate_meeting:
+            self._schedule_simulate_join(session_id)
+        elif self._worker_manager:
+            self._worker_manager.spawn(session_id)
 
     def _schedule_simulate_join(self, session_id: UUID) -> None:
         if session_id in self._simulate_tasks:

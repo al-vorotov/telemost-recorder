@@ -50,6 +50,21 @@ async def create_session(
         raise _http_error(e) from e
 
 
+@router.get("/active/current", response_model=SessionResponse)
+async def get_active_session(
+    telegram_id: int,
+    db: AsyncSession = Depends(get_db),
+    svc: SessionService = Depends(get_session_service),
+) -> SessionResponse:
+    try:
+        record = await svc.get_active_session(db, telegram_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="No active session")
+        return SessionResponse(**svc.to_response(record))
+    except Exception as e:
+        raise _http_error(e) from e
+
+
 @router.get("/{session_id}", response_model=SessionResponse)
 async def get_session(
     session_id: UUID,
