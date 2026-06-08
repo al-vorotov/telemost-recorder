@@ -11,12 +11,7 @@ def join_mode_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Подключиться сейчас", callback_data="join_now")],
-            [
-                InlineKeyboardButton(
-                    text="Запланировать (скоро)",
-                    callback_data="join_scheduled_stub",
-                )
-            ],
+            [InlineKeyboardButton(text="Запланировать", callback_data="join_schedule")],
         ]
     )
 
