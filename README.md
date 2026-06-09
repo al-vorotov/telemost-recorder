@@ -83,4 +83,6 @@ docker compose up -d redis   # postgres опционально
 
 - **Запланировать** — формат `ДД.ММ.ГГГГ ЧЧ:ММ` (МСК), APScheduler в gateway
 - **/status** — активная сессия
+- **/cancel** — отменить запланированное подключение
+- **LLM summary** — если задан `LLM_API_KEY`, после транскрипта предложит краткое содержание
 - **retention sweeper** — автоудаление аудио по `audio_expires_at` (каждый час)
