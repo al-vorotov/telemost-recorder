@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     simulate_transcription: bool = False  # true = заглушка txt; false = transcriber + Whisper
     schedule_timezone: str = "Europe/Moscow"
     retention_sweep_interval_hours: int = 1
+
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-4o-mini"
+    llm_summary_prompt: str = (
+        "Сделай структурированное краткое содержание встречи на русском: "
+        "ключевые темы, решения, задачи. Транскрипт:\n\n{transcript}"
+    )
     gateway_base_url: str = "http://127.0.0.1:8000"
 
     @property

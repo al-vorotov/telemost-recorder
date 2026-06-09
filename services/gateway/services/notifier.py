@@ -18,6 +18,7 @@ async def notify_user(
     show_transcribe_prompt: bool = False,
     show_audio_cleanup: bool = False,
     attach_transcript: bool = False,
+    show_summarize_prompt: bool = False,
 ) -> None:
     user = await db.get(User, record.user_id)
     if not user:
@@ -31,6 +32,7 @@ async def notify_user(
             show_transcribe_prompt=show_transcribe_prompt,
             show_audio_cleanup=show_audio_cleanup,
             attach_transcript=attach_transcript,
+            show_summarize_prompt=show_summarize_prompt,
         )
     )
     logger.debug("Notification → tg:%s session:%s", user.telegram_id, record.id)

@@ -118,6 +118,7 @@ async def run_event_listener() -> None:
                             record,
                             f"📄 {status_label(SessionStatus.TRANSCRIPT_READY)}",
                             attach_transcript=True,
+                            show_summarize_prompt=bool(settings.llm_api_key.strip()),
                             show_audio_cleanup=True,
                         )
                     elif event.event == "transcription_failed":

@@ -29,6 +29,7 @@ class NotificationMessage:
     show_transcribe_prompt: bool = False
     show_audio_cleanup: bool = False
     attach_transcript: bool = False
+    show_summarize_prompt: bool = False
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
@@ -43,6 +44,7 @@ class NotificationMessage:
             show_transcribe_prompt=bool(data.get("show_transcribe_prompt")),
             show_audio_cleanup=bool(data.get("show_audio_cleanup")),
             attach_transcript=bool(data.get("attach_transcript")),
+            show_summarize_prompt=bool(data.get("show_summarize_prompt")),
         )
 
 

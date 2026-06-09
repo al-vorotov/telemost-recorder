@@ -135,6 +135,39 @@ async def start_transcribe(
         raise _http_error(e) from e
 
 
+@router.post("/{session_id}/cancel", response_model=SessionResponse)
+async def cancel_scheduled(
+    session_id: UUID,
+    telegram_id: int,
+    db: AsyncSession = Depends(get_db),
+    svc: SessionService = Depends(get_session_service),
+) -> SessionResponse:
+    try:
+        record = await svc.cancel_scheduled(db, session_id, telegram_id)
+        return SessionResponse(**svc.to_response(record))
+    except Exception as e:
+        raise _http_error(e) from e
+
+
+@router.post("/{session_id}/summarize")
+async def summarize_session(
+    session_id: UUID,
+    telegram_id: int,
+    db: AsyncSession = Depends(get_db),
+    svc: SessionService = Depends(get_session_service),
+):
+    try:
+        summary = await svc.summarize(db, session_id, telegram_id)
+        path = svc.summary_file_path(session_id)
+        if not path:
+            raise HTTPException(status_code=500, detail="Summary file missing")
+        return FileResponse(path, filename="summary.md", media_type="text/markdown")
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise _http_error(e) from e
+
+
 @router.post("/{session_id}/decline-transcribe", response_model=SessionResponse)
 async def decline_transcribe(
     session_id: UUID,
