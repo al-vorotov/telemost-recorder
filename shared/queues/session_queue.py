@@ -24,6 +24,11 @@ class NotificationMessage:
     telegram_id: int
     text: str
     session_id: str | None = None
+    # tg-bot: optional UI actions
+    show_recording_controls: bool = False
+    show_transcribe_prompt: bool = False
+    show_audio_cleanup: bool = False
+    attach_transcript: bool = False
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
@@ -34,6 +39,10 @@ class NotificationMessage:
             telegram_id=int(data["telegram_id"]),
             text=data["text"],
             session_id=data.get("session_id"),
+            show_recording_controls=bool(data.get("show_recording_controls")),
+            show_transcribe_prompt=bool(data.get("show_transcribe_prompt")),
+            show_audio_cleanup=bool(data.get("show_audio_cleanup")),
+            attach_transcript=bool(data.get("attach_transcript")),
         )
 
 
