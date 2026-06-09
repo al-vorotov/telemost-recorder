@@ -72,6 +72,12 @@ class SessionScheduler:
             )
         logger.info("Scheduled join for %s at %s", session_id, run_at_utc.isoformat())
 
+    def unschedule(self, session_id: UUID) -> None:
+        job_id = f"join-{session_id}"
+        if self._scheduler.get_job(job_id):
+            self._scheduler.remove_job(job_id)
+            logger.info("Removed scheduled join for %s", session_id)
+
     async def _fire_join(self, session_id: UUID) -> None:
         from services.gateway.deps import get_worker_manager
 
