@@ -9,14 +9,66 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U recorder -d telemost_recorder"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-  # gateway, tg-bot, transcriber — подключим на следующих шагах
-  # meeting-worker запускается gateway как subprocess, не как постоянный сервис
+  gateway:
+    build: .
+    command: python -m services.gateway
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://recorder:recorder@postgres:5432/telemost_recorder
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /app/data
+    volumes:
+      - appdata:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tg-bot:
+    build: .
+    command: python -m services.tg_bot
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      GATEWAY_BASE_URL: http://gateway:8000
+    depends_on:
+      - gateway
+      - redis
+    restart: unless-stopped
+
+  transcriber:
+    build: .
+    command: python -m services.transcriber
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /app/data
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      - redis
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  appdata:

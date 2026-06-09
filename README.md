@@ -36,19 +36,26 @@ telemost-recorder/
 
 Документация по FSM сессий: `shared/contracts/session.py`.
 
-### Запуск (gateway + Telegram)
+### Docker (рекомендуется для VM)
 
 ```bash
 cp .env.example .env
-# Заполните TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_IDS, BOT_API_SECRET
+# TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_IDS, BOT_API_SECRET
 
-# Терминал 1
+docker compose up -d --build
+```
+
+Сервисы: `gateway` :8000, `tg-bot`, `transcriber`, `postgres`, `redis`.  
+Данные сессий: volume `appdata`.
+
+### Локально без Docker
+
+```bash
+cp .env.example .env
+docker compose up -d redis   # или redis + postgres
+
 python -m services.gateway
-
-# Терминал 2
 python -m services.tg_bot
-
-# Терминал 3 (транскрибация)
 python -m services.transcriber
 ```
 
