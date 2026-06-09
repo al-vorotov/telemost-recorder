@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from services.gateway.deps import get_session_factory, get_worker_manager
-from services.gateway.services.session_fsm import InvalidTransitionError
+from services.gateway.services.notifier import notify_user
+from services.gateway.services.session_fsm import InvalidTransitionError, status_label
 from services.gateway.services.session_service import SessionService
 from shared.config.settings import get_settings
 from shared.contracts.session import SessionStatus
@@ -39,19 +40,30 @@ async def run_event_listener() -> None:
                     status = SessionStatus(record.status)
 
                     if event.event == "waiting_room" and status == SessionStatus.JOINING:
-                        await svc._transition(db, record, "waiting_room")  # noqa: SLF001
+                        record = await svc._transition(db, record, "waiting_room")  # noqa: SLF001
+                        await notify_user(
+                            queue,
+                            db,
+                            record,
+                            f"🚪 {status_label(SessionStatus.WAITING_ROOM)}",
+                        )
                     elif event.event == "recording" and status in (
                         SessionStatus.JOINING,
                         SessionStatus.WAITING_ROOM,
                     ):
                         try:
-                            await svc._transition(db, record, "recording")
+                            record = await svc._transition(db, record, "recording")
                         except InvalidTransitionError:
                             if status == SessionStatus.JOINING:
-                                await svc._transition(db, record, "waiting_room")
-                                record = await db.get(SessionRecord, sid)
-                                if record:
-                                    await svc._transition(db, record, "recording")
+                                record = await svc._transition(db, record, "waiting_room")
+                                record = await svc._transition(db, record, "recording")
+                        await notify_user(
+                            queue,
+                            db,
+                            record,
+                            f"🔴 {status_label(SessionStatus.RECORDING)}\nМожно остановить запись.",
+                            show_recording_controls=True,
+                        )
                     elif event.event == "capture_stopped":
                         worker_mgr.notify_capture_stopped(record.id)
                     elif event.event == "left":
@@ -59,15 +71,34 @@ async def run_event_listener() -> None:
                     elif event.event == "failed":
                         try:
                             record.error_code = (event.message or "worker_failed")[:64]
-                            await svc._transition(db, record, "fail")
+                            record = await svc._transition(db, record, "fail")
+                            await notify_user(
+                                queue,
+                                db,
+                                record,
+                                f"❌ Ошибка: {record.error_code}",
+                            )
                         except InvalidTransitionError:
                             pass
                     elif event.event == "meeting_ended":
                         if status == SessionStatus.IN_CALL:
-                            await svc._transition(db, record, "leave")
+                            record = await svc._transition(db, record, "leave")
+                            await notify_user(
+                                queue,
+                                db,
+                                record,
+                                f"📴 {status_label(SessionStatus.RECORDED)}",
+                                show_transcribe_prompt=True,
+                            )
                     elif event.event == "transcribing":
                         if status == SessionStatus.TRANSCRIPTION_QUEUED:
-                            await svc._transition(db, record, "transcribing")
+                            record = await svc._transition(db, record, "transcribing")
+                            await notify_user(
+                                queue,
+                                db,
+                                record,
+                                f"⏳ {status_label(SessionStatus.TRANSCRIBING)}",
+                            )
                     elif event.event == "transcript_ready":
                         if event.transcript_path:
                             record.transcript_object_key = event.transcript_path
@@ -78,14 +109,27 @@ async def run_event_listener() -> None:
                         record.transcribed_at = datetime.now(UTC)
                         await db.commit()
                         if status == SessionStatus.TRANSCRIBING:
-                            await svc._transition(db, record, "transcript_ready")
-                            record = await db.get(SessionRecord, sid)
-                        if record and record.status == SessionStatus.TRANSCRIPT_READY.value:
-                            await svc._transition(db, record, "await_audio_disposal")
+                            record = await svc._transition(db, record, "transcript_ready")
+                        if record.status == SessionStatus.TRANSCRIPT_READY.value:
+                            record = await svc._transition(db, record, "await_audio_disposal")
+                        await notify_user(
+                            queue,
+                            db,
+                            record,
+                            f"📄 {status_label(SessionStatus.TRANSCRIPT_READY)}",
+                            attach_transcript=True,
+                            show_audio_cleanup=True,
+                        )
                     elif event.event == "transcription_failed":
                         record.error_code = (event.message or "transcription_failed")[:64]
                         try:
-                            await svc._transition(db, record, "fail")
+                            record = await svc._transition(db, record, "fail")
+                            await notify_user(
+                                queue,
+                                db,
+                                record,
+                                f"❌ Транскрибация не удалась: {record.error_code}",
+                            )
                         except InvalidTransitionError:
                             pass
 
