@@ -15,7 +15,30 @@ async def cmd_start(message: Message) -> None:
         "Привет! Я записываю звонки в Яндекс Телемост.\n\n"
         "Отправьте ссылку на встречу, например:\n"
         "https://telemost.yandex.ru/j/12345678901234\n\n"
-        "/status — текущая сессия"
+        "/status — текущая сессия\n"
+        "/cancel — отменить запланированное подключение"
+    )
+
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, gateway: GatewayClient) -> None:
+    if not message.from_user:
+        return
+    data = await gateway.get_active_session(message.from_user.id)
+    if not data:
+        await message.answer("Нет активной сессии для отмены.")
+        return
+    if data["status"] != SessionStatus.SCHEDULED.value:
+        await message.answer("Отменить можно только запланированную сессию. Текущий статус: " + data["status_label"])
+        return
+    from uuid import UUID
+
+    from services.tg_bot.keyboards.session import cancel_scheduled_keyboard
+
+    sid = UUID(data["id"])
+    await message.answer(
+        f"Отменить подключение на {data.get('scheduled_at', '?')}?",
+        reply_markup=cancel_scheduled_keyboard(sid),
     )
 
 

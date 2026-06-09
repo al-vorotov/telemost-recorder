@@ -23,6 +23,9 @@ class LocalStorageAdapter:
     def transcript_path(self, session_id: UUID) -> Path:
         return self.session_dir(session_id) / "transcript.txt"
 
+    def summary_path(self, session_id: UUID) -> Path:
+        return self.session_dir(session_id) / "summary.md"
+
     async def delete_audio(self, session_id: UUID) -> None:
         path = self.audio_path(session_id)
         if path.exists():

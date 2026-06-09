@@ -9,6 +9,7 @@ from services.tg_bot.clients.gateway import GatewayClient
 from services.tg_bot.handlers.common import parse_schedule_datetime, parse_session_id, validate_link
 from shared.config.settings import get_settings
 from services.tg_bot.keyboards.session import (
+    cancel_scheduled_keyboard,
     delete_audio_keyboard,
     in_call_keyboard,
     join_mode_keyboard,
@@ -159,11 +160,59 @@ async def _handle_schedule_datetime(message: Message, gateway: GatewayClient) ->
         return
 
     _active_sessions[message.from_user.id] = UUID(data["id"])
+    session_id = UUID(data["id"])
     await message.answer(
         f"Запланировано на {scheduled_at.strftime('%d.%m.%Y %H:%M')} (МСК).\n"
         f"Статус: {data['status_label']}\n\n"
-        "В назначенное время подключусь автоматически. /status — проверить состояние."
+        "В назначенное время подключусь автоматически.\n"
+        "/status — проверить · /cancel — отменить",
+        reply_markup=cancel_scheduled_keyboard(session_id),
     )
+
+
+@router.callback_query(F.data.startswith("cancel_scheduled:"))
+async def on_cancel_scheduled(callback: CallbackQuery, gateway: GatewayClient) -> None:
+    if not callback.from_user or not callback.data:
+        return
+    parsed = parse_session_id(callback.data)
+    if not parsed:
+        return
+    _, session_id = parsed
+    await callback.answer()
+    try:
+        data = await gateway.cancel_scheduled(session_id, callback.from_user.id)
+    except Exception as e:
+        await callback.message.answer(f"Не удалось отменить: {e}")  # type: ignore[union-attr]
+        return
+    _active_sessions.pop(callback.from_user.id, None)
+    await callback.message.edit_text(  # type: ignore[union-attr]
+        f"Запланированная сессия отменена.\n{_format_status(data)}"
+    )
+
+
+@router.callback_query(F.data.startswith("confirm_summarize:"))
+async def on_confirm_summarize(callback: CallbackQuery, gateway: GatewayClient) -> None:
+    if not callback.from_user or not callback.data:
+        return
+    parsed = parse_session_id(callback.data)
+    if not parsed:
+        return
+    _, session_id = parsed
+    await callback.answer()
+    await callback.message.answer("Готовлю краткое содержание…")  # type: ignore[union-attr]
+    try:
+        content = await gateway.summarize(session_id, callback.from_user.id)
+        await callback.message.answer_document(  # type: ignore[union-attr]
+            BufferedInputFile(content, filename="summary.md"),
+            caption="Краткое содержание встречи.",
+        )
+    except Exception as e:
+        await callback.message.answer(f"Не удалось: {e}")  # type: ignore[union-attr]
+
+
+@router.callback_query(F.data.startswith("decline_summarize:"))
+async def on_decline_summarize(callback: CallbackQuery) -> None:
+    await callback.answer("Ок, без саммари")
 
 
 @router.callback_query(F.data.startswith("stop_recording:"))

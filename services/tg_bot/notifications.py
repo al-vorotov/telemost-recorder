@@ -9,6 +9,7 @@ from services.tg_bot.clients.gateway import GatewayClient
 from services.tg_bot.keyboards.session import (
     delete_audio_keyboard,
     recording_keyboard,
+    summarize_keyboard,
     transcribe_keyboard,
 )
 from shared.config.settings import Settings
@@ -50,13 +51,19 @@ async def run_notification_listener(bot: Bot, settings: Settings) -> None:
                         "Управление записью:",
                         reply_markup=recording_keyboard(sid),
                     )
-                elif notification.show_transcribe_prompt:
+                if notification.show_summarize_prompt:
+                    await bot.send_message(
+                        notification.telegram_id,
+                        "Сделать краткое содержание встречи (LLM)?",
+                        reply_markup=summarize_keyboard(sid),
+                    )
+                if notification.show_transcribe_prompt:
                     await bot.send_message(
                         notification.telegram_id,
                         "Подготовить транскрибацию?",
                         reply_markup=transcribe_keyboard(sid),
                     )
-                elif notification.show_audio_cleanup:
+                if notification.show_audio_cleanup:
                     await bot.send_message(
                         notification.telegram_id,
                         "Удалить аудиозапись?",

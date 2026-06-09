@@ -43,6 +43,7 @@ _TRANSITIONS: dict[str, tuple[frozenset[SessionStatus], SessionStatus]] = {
         frozenset({SessionStatus.PENDING_AUDIO_DISPOSAL}),
         SessionStatus.COMPLETED,
     ),
+    "cancel": (frozenset({SessionStatus.SCHEDULED}), SessionStatus.COMPLETED),
     "fail": (
         frozenset(
             {

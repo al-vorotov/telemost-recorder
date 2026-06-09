@@ -70,6 +70,36 @@ def transcribe_keyboard(session_id: UUID) -> InlineKeyboardMarkup:
     )
 
 
+def cancel_scheduled_keyboard(session_id: UUID) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Отменить запланированное",
+                    callback_data=_cb("cancel_scheduled", session_id),
+                )
+            ],
+        ]
+    )
+
+
+def summarize_keyboard(session_id: UUID) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Да, краткое содержание",
+                    callback_data=_cb("confirm_summarize", session_id),
+                ),
+                InlineKeyboardButton(
+                    text="Нет",
+                    callback_data=_cb("decline_summarize", session_id),
+                ),
+            ],
+        ]
+    )
+
+
 def delete_audio_keyboard(session_id: UUID) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

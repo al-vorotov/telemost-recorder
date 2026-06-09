@@ -91,6 +91,24 @@ class GatewayClient:
             r.raise_for_status()
             return r.json()
 
+    async def cancel_scheduled(self, session_id: UUID, telegram_id: int) -> dict:
+        async with self._client() as client:
+            r = await client.post(
+                f"/sessions/{session_id}/cancel",
+                params={"telegram_id": telegram_id},
+            )
+            r.raise_for_status()
+            return r.json()
+
+    async def summarize(self, session_id: UUID, telegram_id: int) -> bytes:
+        async with self._client() as client:
+            r = await client.post(
+                f"/sessions/{session_id}/summarize",
+                params={"telegram_id": telegram_id},
+            )
+            r.raise_for_status()
+            return r.content
+
     async def decline_transcribe(self, session_id: UUID, telegram_id: int) -> dict:
         async with self._client() as client:
             r = await client.post(

@@ -342,3 +342,35 @@ class SessionService:
     def transcript_file_path(self, session_id: UUID):
         path = self._storage.transcript_path(session_id)
         return path if path.exists() else None
+
+    def summary_file_path(self, session_id: UUID):
+        path = self._storage.summary_path(session_id)
+        return path if path.exists() else None
+
+    async def cancel_scheduled(
+        self, db: AsyncSession, session_id: UUID, telegram_id: int
+    ) -> SessionRecord:
+        record = await self._get_session_for_user(db, session_id, telegram_id)
+        if record.status != SessionStatus.SCHEDULED.value:
+            raise ValueError("Only scheduled sessions can be cancelled")
+        from services.gateway.deps import get_scheduler
+
+        get_scheduler().unschedule(session_id)
+        return await self._transition(db, record, "cancel")
+
+    async def summarize(
+        self, db: AsyncSession, session_id: UUID, telegram_id: int
+    ) -> str:
+        from services.gateway.services.llm_postprocess import LlmPostProcessor
+
+        record = await self._get_session_for_user(db, session_id, telegram_id)
+        transcript = self.read_transcript(session_id)
+        if not transcript:
+            raise ValueError("Transcript not found")
+
+        processor = LlmPostProcessor(self._settings)
+        summary = await processor.summarize(transcript)
+        path = self._storage.summary_path(session_id)
+        path.write_text(summary, encoding="utf-8")
+        logger.info("Summary saved for session %s", record.id)
+        return summary
