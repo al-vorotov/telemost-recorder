@@ -86,3 +86,4 @@ docker compose up -d redis   # postgres опционально
 - **/cancel** — отменить запланированное подключение
 - **LLM summary** — если задан `LLM_API_KEY`, после транскрипта предложит краткое содержание
 - **retention sweeper** — автоудаление аудио по `audio_expires_at` (каждый час)
+- **audio cleanup followup** — напоминание по кнопкам удаления аудио и авто-решение по таймауту (`AUDIO_CLEANUP_*`)
