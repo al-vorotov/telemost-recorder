@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     simulate_transcription: bool = False  # true = заглушка txt; false = transcriber + Whisper
     schedule_timezone: str = "Europe/Moscow"
     retention_sweep_interval_hours: int = 1
+    audio_cleanup_followup_interval_minutes: int = 10
+    audio_cleanup_reminder_after_minutes: int = 30
+    audio_cleanup_auto_resolve_after_minutes: int = 180
+    audio_cleanup_auto_action: str = "delete"  # delete | retain
 
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
