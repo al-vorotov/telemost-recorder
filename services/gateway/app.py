@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from services.gateway.deps import get_scheduler, setup_app
 from services.gateway.routers import sessions
+from services.gateway.services.audio_cleanup_followup import process_pending_audio_cleanup
 from services.gateway.services.event_listener import run_event_listener
 from services.gateway.services.retention_sweeper import sweep_expired_audio
 from shared.config.settings import get_settings
@@ -26,12 +27,19 @@ async def lifespan(_app: FastAPI):
         id="retention-sweep",
         replace_existing=True,
     )
+    cleanup_followup_job = scheduler._scheduler.add_job(  # noqa: SLF001
+        process_pending_audio_cleanup,
+        IntervalTrigger(minutes=settings.audio_cleanup_followup_interval_minutes),
+        id="audio-cleanup-followup",
+        replace_existing=True,
+    )
 
     listener_task = asyncio.create_task(run_event_listener())
     yield
 
     listener_task.cancel()
     retention_job.remove()
+    cleanup_followup_job.remove()
     scheduler.shutdown()
     try:
         await listener_task
